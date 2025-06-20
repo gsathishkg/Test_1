@@ -1,34 +1,58 @@
 import streamlit as st
+from graphviz import Digraph
+from pptx import Presentation
+from pptx.util import Inches
 import json
+import os
 
-st.set_page_config(page_title="Mermaid Flowchart Designer", layout="wide")
-st.title("🌊 Mermaid Flowchart Designer (No Graphviz Required)")
+st.set_page_config(page_title="Flowchart Designer", layout="wide")
 
 if "steps" not in st.session_state:
     st.session_state.steps = []
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
 
-def generate_mermaid(steps):
-    lines = ["graph TD"]
-    for step in steps:
-        sid = step["id"]
-        s_label = step["label"]
-        s_type = step["type"]
-        shape = {
-            "start": f'{sid}(({s_label}))',
-            "end": f'{sid}(({s_label}))',
-            "decision": f'{sid}{{{s_label}}}',
-            "process": f'{sid}[{s_label}]'
-        }.get(s_type, f'{sid}[{s_label}]')
-        lines.append(shape)
-        for nxt in step.get("next", []):
-            tid = nxt["id"]
-            label = nxt.get("label", "")
-            lines.append(f'{sid} --|{label}| {tid}')
-    return "\n".join(lines)
+st.title("🎨 Flowchart Designer")
 
-# Input form
+def generate_flowchart(steps):
+    dot = Digraph(format="png")
+    dot.attr(rankdir='TB', splines='ortho', nodesep='1', ranksep='1')
+    step_map = {s["id"]: s for s in steps}
+    added = set()
+
+    def add_node(nid):
+        if nid in added: return
+        step = step_map.get(nid, {"label": nid, "type": "process"})
+        shape = {
+            "start": "circle",
+            "end": "doublecircle",
+            "decision": "diamond",
+            "process": "box"
+        }.get(step["type"], "box")
+        style = 'filled'
+        fillcolor = 'lightgrey'
+        if step["type"] == "start":
+            fillcolor = '#cce5ff'
+        elif step["type"] == "end":
+            fillcolor = '#d4edda'
+        elif step["type"] == "decision":
+            fillcolor = '#fff3cd'
+        dot.node(nid, step["label"], shape=shape, style=style, fillcolor=fillcolor)
+        added.add(nid)
+
+    for step in steps:
+        add_node(step["id"])
+        for nxt in step.get("next", []):
+            add_node(nxt["id"])
+            color = 'black'
+            if nxt.get("label", "").lower() == "yes":
+                color = 'green'
+            elif nxt.get("label", "").lower() == "no":
+                color = 'red'
+            dot.edge(step["id"], nxt["id"], label=nxt.get("label", ""), color=color)
+    return dot
+
+# Input Form
 with st.form("step_form", clear_on_submit=True):
     if st.session_state.edit_index is None:
         st.subheader("➕ Add New Step")
@@ -39,8 +63,7 @@ with st.form("step_form", clear_on_submit=True):
 
     step_id = st.text_input("Step ID", value=default["id"])
     label = st.text_input("Label", value=default["label"])
-    step_type = st.selectbox("Step Type", ["start", "process", "decision", "end"],
-                             index=["start", "process", "decision", "end"].index(default["type"]))
+    step_type = st.selectbox("Step Type", ["start", "process", "decision", "end"], index=["start", "process", "decision", "end"].index(default["type"]))
     next_steps = []
     for i in range(2):
         col1, col2 = st.columns(2)
@@ -61,7 +84,7 @@ with st.form("step_form", clear_on_submit=True):
             st.session_state.edit_index = None
         st.success("Step saved!")
 
-# Edit/Delete
+# Edit/Delete UI
 st.subheader("🧾 Flow Steps")
 for idx, step in enumerate(st.session_state.steps):
     cols = st.columns([4, 1, 1])
@@ -78,18 +101,32 @@ for idx, step in enumerate(st.session_state.steps):
             st.experimental_rerun()
 
 # Preview
-st.subheader("🖼 Flowchart Preview (Mermaid.js)")
-if st.session_state.steps:
-    mermaid = generate_mermaid(st.session_state.steps)
-    st.markdown(f"```mermaid\n{mermaid}\n```")
+st.subheader("🖼 Flowchart Preview")
+flow = generate_flowchart(st.session_state.steps)
+st.graphviz_chart(flow)
 
-else:
-    st.info("Add steps to generate the flowchart.")
+# Export
+col1, col2, col3 = st.columns(3)
 
-# Inject Mermaid.js script
-st.components.v1.html("""
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad: true });
-</script>
-""", height=0)
+with col1:
+    st.download_button("⬇️ Download PNG", data=flow.pipe(format="png"),
+                       file_name="flowchart.png", mime="image/png")
+
+with col2:
+    if st.button("📊 Export to PPTX"):
+        flow.render(filename="temp_flow", format="png", cleanup=True)
+        prs = Presentation()
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
+        slide.shapes.add_picture("temp_flow.png", Inches(1), Inches(1), height=Inches(5.5))
+        prs.save("flowchart_output.pptx")
+        with open("flowchart_output.pptx", "rb") as f:
+            st.download_button("📥 Download PPTX", data=f, file_name="flowchart.pptx")
+
+with col3:
+    with st.expander("💾 Save / Load"):
+        if st.download_button("📥 Download JSON", json.dumps(st.session_state.steps, indent=2), file_name="flow.json"):
+            st.success("Saved JSON")
+        uploaded = st.file_uploader("Upload flow JSON", type=["json"])
+        if uploaded:
+            st.session_state.steps = json.load(uploaded)
+            st.experimental_rerun()
