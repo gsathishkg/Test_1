@@ -81,11 +81,8 @@ for idx, step in enumerate(st.session_state.steps):
 st.subheader("🖼 Flowchart Preview (Mermaid.js)")
 if st.session_state.steps:
     mermaid = generate_mermaid(st.session_state.steps)
-    st.markdown(f"""
-    <div class="mermaid">
-    {mermaid}
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"```mermaid\n{mermaid}\n```")
+
 else:
     st.info("Add steps to generate the flowchart.")
 
