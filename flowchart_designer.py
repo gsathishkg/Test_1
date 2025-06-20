@@ -10,29 +10,25 @@ if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
 
 def generate_mermaid(steps):
-    id_map = {s["id"]: s for s in steps}
     lines = ["graph TD"]
-
     for step in steps:
         sid = step["id"]
         s_label = step["label"]
         s_type = step["type"]
         shape = {
-            "start": f"{sid}(({s_label}))",
-            "end": f"{sid}(({s_label}))",
-            "decision": f"{sid}{{{s_label}}}",
-            "process": f"{sid}[{s_label}]"
-        }.get(s_type, f"{sid}[{s_label}]")
-
+            "start": f'{sid}(({s_label}))',
+            "end": f'{sid}(({s_label}))',
+            "decision": f'{sid}{{{s_label}}}',
+            "process": f'{sid}[{s_label}]'
+        }.get(s_type, f'{sid}[{s_label}]')
         lines.append(shape)
-
         for nxt in step.get("next", []):
             tid = nxt["id"]
             label = nxt.get("label", "")
-            lines.append(f"{sid} --|{label}| {tid}")
+            lines.append(f'{sid} --|{label}| {tid}')
+    return "\n".join(lines)
 
-    return "\\n".join(lines)
-
+# Input form
 with st.form("step_form", clear_on_submit=True):
     if st.session_state.edit_index is None:
         st.subheader("➕ Add New Step")
@@ -65,7 +61,7 @@ with st.form("step_form", clear_on_submit=True):
             st.session_state.edit_index = None
         st.success("Step saved!")
 
-# Edit/Delete UI
+# Edit/Delete
 st.subheader("🧾 Flow Steps")
 for idx, step in enumerate(st.session_state.steps):
     cols = st.columns([4, 1, 1])
@@ -81,23 +77,22 @@ for idx, step in enumerate(st.session_state.steps):
                 st.session_state.edit_index = None
             st.experimental_rerun()
 
-# Preview Mermaid
+# Preview
 st.subheader("🖼 Flowchart Preview (Mermaid.js)")
-
 if st.session_state.steps:
     mermaid = generate_mermaid(st.session_state.steps)
-    st.markdown(f'''
+    st.markdown(f"""
     <div class="mermaid">
     {mermaid}
     </div>
-    ''', unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 else:
     st.info("Add steps to generate the flowchart.")
 
-# Mermaid.js loader
-st.components.v1.html(\"\"\"
+# Inject Mermaid.js script
+st.components.v1.html("""
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
   mermaid.initialize({ startOnLoad: true });
 </script>
-\"\"\", height=0)
+""", height=0)
