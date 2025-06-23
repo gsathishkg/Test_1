@@ -58,12 +58,19 @@ with st.form("step_form", clear_on_submit=True):
     for i in range(2):
         col1, col2 = st.columns(2)
         with col1:
-            lbl = st.text_input(f"Label (e.g., Yes/No) {i+1}", value=default["next"][i].get("label", "") if i < len(default["next"]) else "")
+            lbl = st.text_input(
+                f"Label (e.g., Yes/No) {i+1}",
+                value=default["next"][i].get("label", "") if i < len(default["next"]) else "",
+                placeholder="Yes / No / Continue"
+            )
         with col2:
-            nid = st.text_input(f"Next Step ID {i+1}", value=default["next"][i]["id"] if i < len(default["next"]) else "")
+            nid = st.text_input(
+                f"Next Step ID {i+1}",
+                value=default["next"][i]["id"] if i < len(default["next"]) else "",
+                placeholder="S002"
+            )
         if nid:
             next_steps.append({"id": nid, "label": lbl})
-
 
     submitted = st.form_submit_button("✅ Save Step")
     if submitted:
