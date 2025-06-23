@@ -1,47 +1,50 @@
 import streamlit as st
-from graphviz import Digraph
 import json
 
-st.set_page_config(page_title="Flowchart Designer", layout="wide")
+st.set_page_config(page_title="Mermaid Flowchart Designer", layout="wide")
 
 if "steps" not in st.session_state:
     st.session_state.steps = []
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
 
-st.title("🎨 Flowchart Designer")
+st.title("🌊 Mermaid Flowchart Designer")
 
-def generate_flowchart_source(steps):
-    dot = Digraph()
-    dot.attr(rankdir='TB', splines='ortho', nodesep='1', ranksep='1')
-    step_map = {s["id"]: s for s in steps}
-    added = set()
-
-    def add_node(nid):
-        if nid in added: return
-        step = step_map.get(nid, {"label": nid, "type": "process"})
-        shape = {
-            "start": "circle",
-            "end": "doublecircle",
-            "decision": "diamond",
-            "process": "box"
-        }.get(step["type"], "box")
-        dot.node(nid, step["label"], shape=shape)
-        added.add(nid)
+# Mermaid generator with styling
+def generate_mermaid_source(steps):
+    lines = ["graph TD"]
+    styles = []
+    defined_ids = set()
 
     for step in steps:
-        add_node(step["id"])
+        defined_ids.add(step["id"])
+        if step["type"] == "start":
+            lines.append(f'{step["id"]}(["{step["label"]}"])')
+            styles.append(f'class {step["id"]} start;')
+        elif step["type"] == "end":
+            lines.append(f'{step["id"]}(["{step["label"]}"])')
+            styles.append(f'class {step["id"]} end;')
+        elif step["type"] == "decision":
+            lines.append(f'{step["id"]}{{"{step["label"]}"}}')
+            styles.append(f'class {step["id"]} decision;')
+        else:
+            lines.append(f'{step["id"]}["{step["label"]}"]')
+            styles.append(f'class {step["id"]} process;')
+
         for nxt in step.get("next", []):
-            add_node(nxt["id"])
-            label = nxt.get("label", "")
-            color = "black"
-            if label.lower() == "yes": color = "green"
-            if label.lower() == "no": color = "red"
-            dot.edge(step["id"], nxt["id"], label=label, color=color)
+            label = f'|{nxt["label"]}|' if nxt.get("label") else ""
+            lines.append(f'{step["id"]} {label} --> {nxt["id"]}')
 
-    return dot.source
+    # Style block
+    lines.append("classDef start fill:#c6f6d5,stroke:#2f855a,stroke-width:2px;")
+    lines.append("classDef process fill:#bee3f8,stroke:#3182ce,stroke-width:2px;")
+    lines.append("classDef decision fill:#fbd38d,stroke:#dd6b20,stroke-width:2px;")
+    lines.append("classDef end fill:#feb2b2,stroke:#c53030,stroke-width:2px;")
+    lines.extend(styles)
 
-# Input Form
+    return "\n".join(lines)
+
+# Input form
 with st.form("step_form", clear_on_submit=True):
     if st.session_state.edit_index is None:
         st.subheader("➕ Add New Step")
@@ -54,12 +57,13 @@ with st.form("step_form", clear_on_submit=True):
     label = st.text_input("Label", value=default["label"])
     step_type = st.selectbox("Step Type", ["start", "process", "decision", "end"],
                              index=["start", "process", "decision", "end"].index(default["type"]))
+
     next_steps = []
     for i in range(2):
         col1, col2 = st.columns(2)
         with col1:
             lbl = st.text_input(
-                f"Label (e.g., Yes/No) {i+1}",
+                f"Edge Label {i+1} (Yes/No/Continue)",
                 value=default["next"][i].get("label", "") if i < len(default["next"]) else "",
                 placeholder="Yes / No / Continue"
             )
@@ -82,7 +86,7 @@ with st.form("step_form", clear_on_submit=True):
             st.session_state.edit_index = None
         st.success("Step saved!")
 
-# Edit/Delete UI
+# Display steps with edit/delete
 st.subheader("🧾 Flow Steps")
 for idx, step in enumerate(st.session_state.steps):
     cols = st.columns([4, 1, 1])
@@ -98,24 +102,26 @@ for idx, step in enumerate(st.session_state.steps):
                 st.session_state.edit_index = None
             st.experimental_rerun()
 
-# Preview using source only (no dot binary)
-st.subheader("🖼 Flowchart Preview")
-dot_source = generate_flowchart_source(st.session_state.steps)
-st.graphviz_chart(dot_source)
+# Mermaid Diagram Preview
+st.subheader("🖼 Flowchart Preview (Mermaid.js)")
+mermaid_code = generate_mermaid_source(st.session_state.steps)
+st.markdown(f"```mermaid\n{mermaid_code}\n```", unsafe_allow_html=True)
 
-# Export
-col1, col2, col3 = st.columns(3)
+# Show Mermaid source
+with st.expander("🔍 Mermaid Source"):
+    st.code(mermaid_code, language="mermaid")
 
-with col1:
-    st.info("⬇️ PNG/SVG export disabled (Graphviz binary not available)")
+# Check for missing step links
+defined_ids = {s["id"] for s in st.session_state.steps}
+for step in st.session_state.steps:
+    for nxt in step.get("next", []):
+        if nxt["id"] not in defined_ids:
+            st.warning(f"⚠️ Step `{step['id']}` points to undefined step ID `{nxt['id']}`")
 
-with col2:
-    st.info("📊 PPTX export disabled (requires Graphviz binary)")
-
-with col3:
-    with st.expander("💾 Save / Load"):
-        st.download_button("📥 Download JSON", json.dumps(st.session_state.steps, indent=2), file_name="flow.json")
-        uploaded = st.file_uploader("Upload flow JSON", type=["json"])
-        if uploaded:
-            st.session_state.steps = json.load(uploaded)
-            st.experimental_rerun()
+# Import/Export
+with st.expander("💾 Save / Load Flow"):
+    st.download_button("📥 Download JSON", json.dumps(st.session_state.steps, indent=2), file_name="flow.json")
+    uploaded = st.file_uploader("Upload flow JSON", type=["json"])
+    if uploaded:
+        st.session_state.steps = json.load(uploaded)
+        st.experimental_rerun()
