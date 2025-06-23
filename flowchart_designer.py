@@ -60,7 +60,7 @@ with st.form("step_form", clear_on_submit=True):
 
     next_steps = []
     for i in range(2):
-        col1, col2 = st.columns(2)
+        col1, col2 = columns(2)
         with col1:
             lbl = st.text_input(
                 f"Edge Label {i+1} (Yes/No/Continue)",
@@ -109,7 +109,8 @@ st.markdown(f"```mermaid\n{mermaid_code}\n```", unsafe_allow_html=True)
 
 # Show Mermaid source
 with st.expander("🔍 Mermaid Source"):
-    st.code(mermaid_code, language="mermaid")
+    st.markdown(f"```mermaid\n{mermaid_code}\n```", unsafe_allow_html=True)  # ✅ Renders chart
+
 
 # Check for missing step links
 defined_ids = {s["id"] for s in st.session_state.steps}
