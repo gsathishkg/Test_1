@@ -1,11 +1,9 @@
 import streamlit as st
 from graphviz import Digraph
 import json
-from io import BytesIO
 
 st.set_page_config(page_title="Flowchart Designer", layout="wide")
 
-# Initialize session state
 if "steps" not in st.session_state:
     st.session_state.steps = []
 if "edit_index" not in st.session_state:
@@ -13,9 +11,8 @@ if "edit_index" not in st.session_state:
 
 st.title("🎨 Flowchart Designer")
 
-# Generate SVG flowchart
-def generate_flowchart(steps):
-    dot = Digraph(format="svg")  # No dot.exe needed
+def generate_flowchart_source(steps):
+    dot = Digraph()
     dot.attr(rankdir='TB', splines='ortho', nodesep='1', ranksep='1')
     step_map = {s["id"]: s for s in steps}
     added = set()
@@ -29,30 +26,22 @@ def generate_flowchart(steps):
             "decision": "diamond",
             "process": "box"
         }.get(step["type"], "box")
-        style = 'filled'
-        fillcolor = 'lightgrey'
-        if step["type"] == "start":
-            fillcolor = '#cce5ff'
-        elif step["type"] == "end":
-            fillcolor = '#d4edda'
-        elif step["type"] == "decision":
-            fillcolor = '#fff3cd'
-        dot.node(nid, step["label"], shape=shape, style=style, fillcolor=fillcolor)
+        dot.node(nid, step["label"], shape=shape)
         added.add(nid)
 
     for step in steps:
         add_node(step["id"])
         for nxt in step.get("next", []):
             add_node(nxt["id"])
-            color = 'black'
-            if nxt.get("label", "").lower() == "yes":
-                color = 'green'
-            elif nxt.get("label", "").lower() == "no":
-                color = 'red'
-            dot.edge(step["id"], nxt["id"], label=nxt.get("label", ""), color=color)
-    return dot
+            label = nxt.get("label", "")
+            color = "black"
+            if label.lower() == "yes": color = "green"
+            if label.lower() == "no": color = "red"
+            dot.edge(step["id"], nxt["id"], label=label, color=color)
 
-# Step form
+    return dot.source
+
+# Input Form
 with st.form("step_form", clear_on_submit=True):
     if st.session_state.edit_index is None:
         st.subheader("➕ Add New Step")
@@ -101,20 +90,19 @@ for idx, step in enumerate(st.session_state.steps):
                 st.session_state.edit_index = None
             st.experimental_rerun()
 
-# Flowchart Preview
+# Preview using source only (no dot binary)
 st.subheader("🖼 Flowchart Preview")
-flow = generate_flowchart(st.session_state.steps)
-svg_data = flow.pipe(format="svg")
-st.image(svg_data, caption="Flowchart", use_column_width=True)
+dot_source = generate_flowchart_source(st.session_state.steps)
+st.graphviz_chart(dot_source)
 
-# Export Options
+# Export
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.download_button("⬇️ Download SVG", data=svg_data, file_name="flowchart.svg", mime="image/svg+xml")
+    st.info("⬇️ PNG/SVG export disabled (Graphviz binary not available)")
 
 with col2:
-    st.info("📊 PPTX export is disabled (requires Graphviz binary).")
+    st.info("📊 PPTX export disabled (requires Graphviz binary)")
 
 with col3:
     with st.expander("💾 Save / Load"):
